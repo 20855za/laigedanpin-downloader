@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         来个单品网 小说下载器 (laigedanpin)
 // @namespace    https://github.com/20855za
-// @version      1.0.0
+// @version      1.0.1
 // @description  在 laigedanpin1.com 的书籍页添加「下载全书 TXT」按钮，一键把整本小说存成 txt（可直接拖进「词沉浸」App 阅读）
 // @author       cien
 // @match        *://www.laigedanpin1.com/*
 // @match        *://laigedanpin1.com/*
 // @match        *://m.laigedanpin1.com/*
 // @connect      laigedanpin1.com
+// @updateURL    https://raw.githubusercontent.com/20855za/laigedanpin-downloader/main/laigedanpin-downloader.user.js
+// @downloadURL  https://raw.githubusercontent.com/20855za/laigedanpin-downloader/main/laigedanpin-downloader.user.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_download
 // @run-at       document-idle
@@ -63,14 +65,25 @@
   }
 
   // 取单章正文（#content）
+  // ⚠️ 关键：DOMParser 生成的是「游离文档」，没有渲染布局，浏览器里 innerText 会返回空字符串！
+  // 必须用 innerHTML 解析成纯文本，否则下载出来的 txt 正文全是空的。
+  function htmlToText(el) {
+    if (!el) return '';
+    const c = el.cloneNode(true);
+    c.querySelectorAll('script,style,ins,iframe').forEach((e) => e.remove());
+    let h = c.innerHTML;
+    h = h.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|tr|h\d)>/gi, '\n');
+    h = h.replace(/<[^>]+>/g, '');
+    h = h.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+    return h.replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   async function getChapterText(chapPath) {
     const html = await gmGet(ORIGIN + chapPath);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const c = doc.querySelector('#content');
     if (!c) return '';
-    c.querySelectorAll('script,style,ins,iframe').forEach((e) => e.remove());
-    let txt = c.innerText.replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
-    return txt;
+    return htmlToText(c);
   }
 
   // 书名 / 作者
